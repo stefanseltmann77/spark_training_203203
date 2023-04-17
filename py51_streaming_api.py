@@ -1,7 +1,7 @@
 # %%  setup ############################################################################################################
 from pyspark.sql import DataFrame, Column
-from pyspark.sql.streaming import StreamingQuery
 from pyspark.sql.functions import window
+from pyspark.sql.streaming import StreamingQuery
 
 from py56_fake_stream import STREAM_PATH
 from spark_setup_spark3 import get_spark
@@ -19,7 +19,7 @@ schema = StructType([StructField("BeerID", LongType(), False),
                      StructField("DrinkingVolume", DoubleType(), False),
                      StructField("Consumer", StringType(), False)]
                     )
-stream_path = 'tmp_data/streaming_demo'
+
 print(schema)
 
 # %% ###################################################################################################################
@@ -27,7 +27,6 @@ print(schema)
 
 stream_handle_static = spark.read.csv(schema=schema, path=stream_path, sep="\t")
 stream_handle_static.show()
-stream_handle_static.count()
 stream_handle_static.describe().show()
 
 # normal dataframe operation, still no streaming
@@ -41,7 +40,6 @@ stream_handle_static.isStreaming
 stream_handle = spark.readStream.csv(schema=schema, path=stream_path, sep="\t")
 stream_handle.isStreaming
 # --> now it's true
-stream_handle.show()
 
 # lets define a function for the stream:
 def calc_consumer_frequs(df: DataFrame) -> DataFrame:
@@ -92,7 +90,7 @@ def calc_consumer_frequs_last_interval(df: DataFrame) -> DataFrame:
     return df.groupBy("Consumer", window("DrinkingTime", "1 minute")).count()
 
 
-stream_with_watermark = stream_handle.withWatermark("DrinkingTime", "3 minute")
+stream_with_watermark = stream_handle.withWatermark("DrinkingTime", "5 minute")
 
 stream_query: StreamingQuery = calc_consumer_frequs_last_interval(stream_with_watermark) \
     .writeStream.format("console") \

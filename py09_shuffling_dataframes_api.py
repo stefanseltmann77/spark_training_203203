@@ -1,8 +1,7 @@
 # %% SETUP ############################################################################################################
 import datetime
-from collections.abc import Callable
-
 import numpy as np
+from collections.abc import Callable
 from numpy import ndarray
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as sf
@@ -128,7 +127,7 @@ def get_result_nopreshuffled_4parts_style_distinct():
     spark.conf.set("spark.sql.shuffle.partitions", str(4))
     df, df_styles = csv_reader.load("./data/recipeData.csv"), csv_reader.load("./data/styleData.csv")
     df_joined: DataFrame = df.join(df_styles, on="StyleID")
-    df_joined.select(sf.countDistinct("StyleID")).show()
+    df_joined.select(sf.countDistinct("StyleID")).show()  # ATTENTION not BEER_ID anymore
     spark.conf.set("spark.sql.shuffle.partitions", str(200))  # reset again
 
 print(get_result_nopreshuffled_4parts_style_distinct())

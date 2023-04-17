@@ -1,15 +1,14 @@
 """if not yet running:
-/usr/local/kafka/kafka_2.13-3.1.0/bin/zookeeper-server-start.sh /usr/local/kafka/kafka_2.13-3.1.0/config/zookeeper.properties
-/usr/local/kafka/kafka_2.13-3.1.0/bin/kafka-server-start.sh /usr/local/kafka/kafka_2.13-3.1.0/config/server.properties
+/usr/local/kafka/kafka_2.13-3.1.1/bin/zookeeper-server-start.sh /usr/local/kafka/kafka_2.13-3.1.1/config/zookeeper.properties
+/usr/local/kafka/kafka_2.13-3.1.1/bin/kafka-server-start.sh /usr/local/kafka/kafka_2.13-3.1.1/config/server.properties
 """
 import datetime
 import json
+import numpy as np
+from confluent_kafka import Producer
 from random import randint, random
 from time import sleep
 from typing import Any
-
-import numpy as np
-from confluent_kafka import Producer
 
 
 def build_consumption_event() -> dict[str, Any]:

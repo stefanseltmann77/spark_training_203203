@@ -1,14 +1,16 @@
 # %% SETUP #############################################################################################################
 import datetime
-from pathlib import Path
-
+import delta
+import os
 import pyspark.sql.functions as sf
 from delta.tables import DeltaTable
+from pathlib import Path
+from pprint import pprint
 from py4j.protocol import Py4JJavaError
 
 from spark_setup_spark3 import get_spark
 
-PATH = "delta/recipe"
+PATH = "delta/recipe_2023"
 
 spark = get_spark()
 spark.sparkContext.setLogLevel("ERROR")
@@ -18,9 +20,10 @@ df = spark.read.option("encoding", "utf8") \
          inferSchema=True,
          header=True).withColumnRenamed("Size(L)", "Size_L")
 
-
 # %% Use Delta right away ##############################################################################################
 # simply safe the table to the new format
+
+df.show()
 
 df.write. \
     format("delta"). \
@@ -36,8 +39,10 @@ df.write.format("delta").save(PATH, mode='overwrite')
 # register the table
 deltatab = DeltaTable.forPath(spark, PATH)
 
+deltatab.history()
+
 # show me version history
-deltatab.history().show()
+deltatab.history().show(truncate=False)
 # or just the most recent one
 deltatab.history(1).show()
 # show the operational metrics
@@ -100,7 +105,7 @@ df = spark. \
 df = spark. \
     read. \
     format("delta"). \
-    option("timestampAsOf", '2020-07-21 01:26:03'). \
+    option("timestampAsOf", '2023-03-31 07:40:00'). \
     load(PATH)
 
 # cleanup of old versions
@@ -175,24 +180,69 @@ df_update = df.sample(withReplacement=False, fraction=0.5, seed=21)
 valid_to_dts_max = datetime.datetime(2199, 12, 31)
 
 
-df_initial = df_initial.\
-    withColumn("valid_from_dts", sf.lit(datetime.datetime.now())).\
+df_initial = df_initial. \
+    withColumn("valid_from_dts", sf.lit(datetime.datetime.now())). \
     withColumn("valid_to_dts", sf.lit(valid_to_dts_max))
 df_initial.write.format("delta").save(PATH_SCD2, mode='overwrite')
-
+df_initial.show()
 
 deltadf_scd2 = DeltaTable.forPath(spark, PATH_SCD2)
 deltadf_scd2.toDF().columns
 update_dts = sf.lit(datetime.datetime.now())
 
+df_update.union(df_update)
+
 deltadf_scd2.alias("root"). \
     merge(source=df_update. \
+          withColumn("join_id", sf.lit(None)). \
           withColumn("valid_from_dts", update_dts). \
           withColumn("valid_to_dts", sf.lit(valid_to_dts_max)). \
-          alias("updates"),
-          condition="root.BeerID == updates.BeerID"). \
+          union(df_update.
+                withColumn("join_id", sf.col("BeerID")).
+                withColumn("valid_from_dts", sf.lit(None)).
+                withColumn("valid_to_dts", sf.lit(None))).alias("updates"),
+          condition="root.BeerID = updates.join_id and root.valid_to_dts= '2199-12-31'"). \
     whenMatchedUpdate(set={'valid_to_dts': update_dts}). \
     whenNotMatchedInsertAll(). \
     execute()
 
-deltadf_scd2.toDF().show(truncate=False)
+deltadf_scd2.toDF().where('BeerID = 21').show(truncate=False)
+
+# %% Optimize #########################################################################################################
+
+df = spark.read.option("encoding", "utf8") \
+    .csv("./data/recipeData.csv",
+         inferSchema=True,
+         header=True).withColumnRenamed("Size(L)", "Size_L")
+PATH_FRAGMENTED = 'delta/fragemented'
+
+# fragment a dataset into 100 chunks
+df.repartition(100).write.format('delta').save(path=PATH_FRAGMENTED, mode='overwrite')
+
+# check the number of files
+pprint(os.listdir(PATH_FRAGMENTED))
+pprint(len(os.listdir(PATH_FRAGMENTED)))
+# way to much!!!
+
+# compact the files again within a partition
+table = delta.DeltaTable.forPath(spark, PATH_FRAGMENTED)
+table.optimize().executeCompaction()
+
+# check number of files again [... still too many]
+pprint(os.listdir(PATH_FRAGMENTED))
+pprint(len(os.listdir(PATH_FRAGMENTED)))
+
+# cleanup old versions
+table.vacuum(0)
+
+# now only small number of files
+pprint(os.listdir(PATH_FRAGMENTED))
+pprint(len(os.listdir(PATH_FRAGMENTED)))
+
+# %% Optimize ZOrdering ################################################################################################
+
+table = delta.DeltaTable.forPath(spark, PATH_FRAGMENTED)
+table.optimize().executeZOrderBy('BeerID')  # physically order by BeerId
+
+# can also be done if partitioned.
+# table.optimize().where("BrewMethod='All Grain'").executeZOrderBy('BeerID')

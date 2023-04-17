@@ -12,6 +12,11 @@ df = spark.read.csv("./data/bs140513_032310.csv", header=True, inferSchema=True,
 # One fact-table for the Transactions with category, amount and fraud, ... and the columns to join both the merchant
 # and the customer back in again.
 
+
+dim_cust =
+dim_merc
+fct_trans
+
 # %% Exercise 02: ######################################################################################################
 # How many customers are there? How many merchants and how many transactions?
 # Use your new DataFrames
